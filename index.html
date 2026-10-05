@@ -1,40 +1,209 @@
 <!DOCTYPE html>
-<html lang="es"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Temperatura DS18B20</title>
-<style>
-:root{--bg:#fff;--fg:#1a1a1a;--card:#f3f4f6;--mut:#6b7280;--acc:#e4572e}
-@media(prefers-color-scheme:dark){:root{--bg:#111827;--fg:#f3f4f6;--card:#1f2937;--mut:#9ca3af}}
-body{font:16px system-ui,sans-serif;background:var(--bg);color:var(--fg);max-width:820px;margin:0 auto;padding:16px}
-h1{font-size:1.4rem;margin:.2em 0}.mut{color:var(--mut);font-size:.85rem}
-.card{background:var(--card);border-radius:12px;padding:14px;margin:14px 0}
-.big{font-size:2.4rem;font-weight:700;color:var(--acc)}
-.st{display:flex;gap:18px;flex-wrap:wrap}.st b{display:block;font-size:1.05rem}
-canvas{width:100%;height:160px;display:block;margin-top:10px}
-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:8px}
-td,th{text-align:left;padding:3px 6px;border-bottom:1px solid var(--mut)}
-</style></head><body>
-<h1>🌡️ Temperatura (DS18B20)</h1>
-<div class="mut" id="gen">Cargando…</div>
-<div id="app"></div>
-<script>
-const $=id=>document.getElementById(id);
-function chart(cv,pts){const d=devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;
-cv.width=w*d;cv.height=h*d;const c=cv.getContext("2d");c.scale(d,d);
-const v=pts.map(p=>p.temperatura_C),mn=Math.min(...v),mx=Math.max(...v),r=(mx-mn)||1;
-c.strokeStyle="#e4572e";c.lineWidth=2;c.beginPath();
-v.forEach((t,i)=>{const x=i/Math.max(v.length-1,1)*(w-8)+4,y=h-6-(t-mn)/r*(h-24);i?c.lineTo(x,y):c.moveTo(x,y)});
-c.stroke();c.fillStyle="#888";c.font="11px sans-serif";c.fillText(mx.toFixed(1)+"°",4,11);c.fillText(mn.toFixed(1)+"°",4,h-8)}
-async function load(){try{
-const j=await (await fetch("temperatura.json?"+Date.now())).json();
-$("gen").textContent="Actualizado: "+j.generado.replace("T"," ");
-$("app").innerHTML=j.sensores.map((s,i)=>`<div class="card"><div class="mut">${s.sensor}</div>
-<div class="big">${s.ultima_lectura.temperatura_C.toFixed(2)} °C</div>
-<div class="st"><span>Mín<b>${s.minima}</b></span><span>Máx<b>${s.maxima}</b></span><span>Media<b>${s.media}</b></span><span>Lecturas<b>${s.total_lecturas}</b></span></div>
-<canvas id="c${i}"></canvas><table><tr><th>Fecha y hora</th><th>°C</th></tr>
-${s.lecturas.slice(-8).reverse().map(l=>`<tr><td>${l.fecha_hora.replace("T"," ")}</td><td>${l.temperatura_C.toFixed(2)}</td></tr>`).join("")}</table>
-<p class="mut"><a href="temperatura.csv" style="color:inherit">Descargar CSV</a> · <a href="temperatura.json" style="color:inherit">JSON</a></p></div>`).join("");
-j.sensores.forEach((s,i)=>chart($("c"+i),s.lecturas));
-}catch(e){$("gen").textContent="Sin datos todavía."}}
-load();setInterval(load,60000);
-</script></body></html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitor Raspberry Pi</title>
+  <!-- Librería para gráficos -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+      margin: 0;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .card {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      width: 100%;
+      max-width: 900px;
+    }
+    .header-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin: 0;
+      color: #38bdf8;
+    }
+    p {
+      color: #94a3b8;
+      margin: 0.25rem 0 0 0;
+    }
+    .btn {
+      background-color: #38bdf8;
+      color: #0f172a;
+      border: none;
+      padding: 0.6rem 1.2rem;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .btn:hover {
+      background-color: #0284c7;
+      color: #ffffff;
+    }
+    .chart-container {
+      position: relative;
+      height: 400px;
+      width: 100%;
+    }
+    #error-message {
+      color: #ef4444;
+      font-weight: bold;
+      display: none;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <div class="header-actions">
+      <div>
+        <h1 id="titulo-dispositivo">Raspberry Pi - Cargando...</h1>
+        <p id="subtitulo-info">Leyendo datos desde datos.json</p>
+      </div>
+      <button class="btn" onclick="downloadJSON()">Descargar .json</button>
+    </div>
+
+    <div id="error-message">Error: No se pudo cargar el archivo datos.json. Asegúrate de servir los archivos a través de un servidor local (por ejemplo, Live Server en VS Code).</div>
+
+    <div class="chart-container">
+      <canvas id="piChart"></canvas>
+    </div>
+  </div>
+
+  <script>
+    let datasetGlobal = null;
+
+    // Cargar datos desde el archivo datos.json
+    async function cargarDatos() {
+      try {
+        const response = await fetch('datos.json');
+        if (!response.ok) {
+          throw new Error('No se pudo encontrar el archivo datos.json');
+        }
+        const data = await response.json();
+        datasetGlobal = data;
+
+        // Actualizar textos del encabezado
+        document.getElementById('titulo-dispositivo').textContent = `${data.dispositivo} - ${data.ubicacion}`;
+        document.getElementById('subtitulo-info').textContent = `Telemetría del período: ${data.periodo}`;
+
+        // Renderizar gráfico
+        renderizarGrafico(data.lecturas);
+      } catch (error) {
+        console.error('Error al cargar datos:', error);
+        document.getElementById('error-message').style.display = 'block';
+      }
+    }
+
+    function renderizarGrafico(lecturas) {
+      const ctx = document.getElementById('piChart').getContext('2d');
+
+      const fechas = lecturas.map(item => item.fecha);
+      const temperaturas = lecturas.map(item => item.temperatura_c);
+      const cpu = lecturas.map(item => item.cpu_uso_pct);
+      const ram = lecturas.map(item => item.ram_uso_pct);
+
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: fechas,
+          datasets: [
+            {
+              label: 'Temperatura (°C)',
+              data: temperaturas,
+              borderColor: '#ef4444',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              borderWidth: 2,
+              tension: 0.3,
+              yAxisID: 'yTemp'
+            },
+            {
+              label: 'Uso CPU (%)',
+              data: cpu,
+              borderColor: '#3b82f6',
+              borderWidth: 2,
+              borderDash: [5, 5],
+              tension: 0.3,
+              yAxisID: 'yUsage'
+            },
+            {
+              label: 'Uso RAM (%)',
+              data: ram,
+              borderColor: '#10b981',
+              borderWidth: 2,
+              tension: 0.3,
+              yAxisID: 'yUsage'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              grid: { color: '#334155' },
+              ticks: { color: '#94a3b8' }
+            },
+            yTemp: {
+              type: 'linear',
+              position: 'left',
+              title: { display: true, text: 'Temperatura (°C)', color: '#ef4444' },
+              grid: { color: '#334155' },
+              ticks: { color: '#ef4444' }
+            },
+            yUsage: {
+              type: 'linear',
+              position: 'right',
+              title: { display: true, text: 'Uso (%)', color: '#3b82f6' },
+              grid: { drawOnChartArea: false },
+              ticks: { color: '#3b82f6' },
+              min: 0,
+              max: 100
+            }
+          },
+          plugins: {
+            legend: {
+              labels: { color: '#f8fafc' }
+            }
+          }
+        }
+      });
+    }
+
+    // Función para descargar el archivo json
+    function downloadJSON() {
+      if (!datasetGlobal) return;
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(datasetGlobal, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", "temperatura.json");
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    // Ejecutar carga al abrir la página
+    cargarDatos();
+  </script>
+</body>
+</html>

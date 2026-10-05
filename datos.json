@@ -1,0 +1,37 @@
+{
+  "dispositivo": "Raspberry Pi 4",
+  "ubicacion": "Servidor Principal",
+  "periodo": "Últimos 5 días",
+  "lecturas": [
+    {
+      "fecha": "01 Oct",
+      "temperatura_c": 44.5,
+      "cpu_uso_pct": 38.2,
+      "ram_uso_pct": 52.1
+    },
+    {
+      "fecha": "02 Oct",
+      "temperatura_c": 48.0,
+      "cpu_uso_pct": 45.1,
+      "ram_uso_pct": 54.3
+    },
+    {
+      "fecha": "03 Oct",
+      "temperatura_c": 50.8,
+      "cpu_uso_pct": 56.4,
+      "ram_uso_pct": 53.8
+    },
+    {
+      "fecha": "04 Oct",
+      "temperatura_c": 52.3,
+      "cpu_uso_pct": 42.0,
+      "ram_uso_pct": 51.0
+    },
+    {
+      "fecha": "05 Oct",
+      "temperatura_c": 46.1,
+      "cpu_uso_pct": 35.8,
+      "ram_uso_pct": 48.9
+    }
+  ]
+}
